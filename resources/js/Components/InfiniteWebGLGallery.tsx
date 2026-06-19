@@ -164,6 +164,7 @@ const mobileLayouts: FigureLayout[] = [
 
 const desktopCycleHeight = 295;
 const mobileCycleHeight = 650;
+const layoutCycleSize = desktopLayouts.length;
 
 type FigureStyle = CSSProperties & Record<`--gallery-${string}`, string>;
 
@@ -210,6 +211,20 @@ const getTrackStyle = (imageCount: number): FigureStyle => {
         '--gallery-height': `calc(${getLayoutSpan(desktopLayouts, desktopCycleHeight)} * var(--gallery-unit))`,
         '--gallery-mobile-height': `calc(${getLayoutSpan(mobileLayouts, mobileCycleHeight)} * var(--gallery-unit))`,
     };
+};
+
+const fillLayoutCycle = (images: string[]) => {
+    if (images.length === 0) {
+        return images;
+    }
+
+    const targetLength =
+        Math.ceil(images.length / layoutCycleSize) * layoutCycleSize;
+
+    return Array.from(
+        { length: targetLength },
+        (_, index) => images[index % images.length],
+    );
 };
 
 interface ScreenSize {
@@ -644,7 +659,6 @@ const preloadImage = (src: string) =>
     });
 
 export default function InfiniteWebGLGallery({
-    actions = [],
     images,
     subtitle,
     title,
@@ -658,12 +672,16 @@ export default function InfiniteWebGLGallery({
     const imagesLoaded =
         images.length === 0 || loadedImageSetKey === imageSetKey;
     const webglFallback = failedWebglImageSetKey === imageSetKey;
+    const renderedImages = useMemo(() => fillLayoutCycle(images), [images]);
 
     const figureStyles = useMemo(
-        () => images.map((_, index) => createFigureStyle(index)),
-        [images],
+        () => renderedImages.map((_, index) => createFigureStyle(index)),
+        [renderedImages],
     );
-    const trackStyle = useMemo(() => getTrackStyle(images.length), [images]);
+    const trackStyle = useMemo(
+        () => getTrackStyle(renderedImages.length),
+        [renderedImages.length],
+    );
 
     useEffect(() => {
         const mediaQuery = window.matchMedia(
@@ -749,7 +767,7 @@ export default function InfiniteWebGLGallery({
                 <div className="fixed h-screen w-screen bg-black opacity-85"></div>
                 <div className="infinite-gallery__header fixed flex h-screen w-screen flex-col items-center justify-center">
                     <img
-                        className="mx-auto mb-5 max-w-[100px] invert"
+                        className="mx-auto mb-3 max-w-[100px]"
                         src="/images/sigma-labz-logo.png"
                         alt=""
                     />
@@ -765,10 +783,10 @@ export default function InfiniteWebGLGallery({
                     ref={galleryRef}
                     style={trackStyle}
                 >
-                    {images.map((image, index) => (
+                    {renderedImages.map((image, index) => (
                         <figure
                             className="infinite-gallery__figure"
-                            key={image}
+                            key={`${image}-${index}`}
                             style={figureStyles[index]}
                         >
                             <img
