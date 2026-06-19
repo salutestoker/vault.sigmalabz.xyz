@@ -772,7 +772,7 @@ export default function InfiniteWebGLGallery({
                         alt=""
                     />
                     <img
-                        className="mx-auto max-w-[800px]"
+                        className="mx-auto w-[800px] max-w-full"
                         src="/images/sigma-vault-logo.png"
                         alt=""
                     />
