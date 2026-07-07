@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 class GalleryMedia extends Model
 {
@@ -149,20 +150,14 @@ class GalleryMedia extends Model
 
     public function getMediaUrlAttribute(): ?string
     {
-        if ($this->media_path) {
-            return Storage::disk(config('gallery.media_disk'))->url($this->media_path);
-        }
-
-        return $this->original_url;
+        return $this->storedMediaUrl($this->media_path) ?: $this->original_url;
     }
 
     public function getThumbnailUrlAttribute(): ?string
     {
-        if ($this->thumbnail_path) {
-            return Storage::disk(config('gallery.media_disk'))->url($this->thumbnail_path);
-        }
+        $storedUrl = $this->storedMediaUrl($this->thumbnail_path);
 
-        return $this->preview_url ?: $this->media_url;
+        return $storedUrl ?: ($this->preview_url ?: $this->media_url);
     }
 
     public function getDisplayTitleAttribute(): string
@@ -173,5 +168,18 @@ class GalleryMedia extends Model
     public function getDisplayDescriptionAttribute(): ?string
     {
         return $this->description ?: $this->ai_description;
+    }
+
+    private function storedMediaUrl(?string $path): ?string
+    {
+        if (! $path) {
+            return null;
+        }
+
+        try {
+            return Storage::disk(config('gallery.media_disk'))->url($path);
+        } catch (Throwable) {
+            return null;
+        }
     }
 }
