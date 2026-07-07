@@ -2,7 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @php
-            $socialTitle = '$SIGMA Vault';
+            $socialTitle = '$SIGMA VAULT';
             $socialDescription = 'Enter the vault. Join the culture.';
             $socialUrl = 'https://vault.sigmalabz.xyz';
             $socialImage = $socialUrl.'/images/og/sigma-vault-og.jpg';

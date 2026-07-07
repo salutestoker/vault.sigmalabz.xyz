@@ -119,7 +119,7 @@ export default function GalleryIndex({
 
     return (
         <main className="vault-gallery">
-            <Head title="$SIGMA Vault Gallery" />
+            <Head title="Gallery" />
 
             <GalleryHeader user={auth.user} />
 

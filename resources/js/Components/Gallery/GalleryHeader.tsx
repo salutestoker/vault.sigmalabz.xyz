@@ -12,7 +12,7 @@ export default function GalleryHeader({ user }: GalleryHeaderProps) {
             <Link href={route('home')} className="vault-gallery__logo-link">
                 <img
                     src="/images/sigma-vault-logo.png"
-                    alt="$SIGMA Vault"
+                    alt="$SIGMA VAULT"
                     className="vault-gallery__logo"
                 />
             </Link>

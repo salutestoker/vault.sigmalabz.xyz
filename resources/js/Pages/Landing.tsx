@@ -46,7 +46,7 @@ export default function Landing({ auth, galleryImages }: LandingProps) {
 
     return (
         <>
-            <Head title="SIGMA Meme Gallery" />
+            <Head title="" />
             <InfiniteWebGLGallery
                 actions={actions}
                 images={galleryImages}

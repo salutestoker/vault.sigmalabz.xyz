@@ -5,10 +5,42 @@ import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+interface InitialPageProps {
+    app?: {
+        name?: string;
+    };
+}
+
+interface InitialPage {
+    props?: InitialPageProps;
+}
+
+const initialPage = (() => {
+    const page = document.getElementById('app')?.dataset.page;
+
+    if (!page) {
+        return null;
+    }
+
+    try {
+        return JSON.parse(page) as InitialPage;
+    } catch {
+        return null;
+    }
+})();
+
+const appName = (
+    initialPage?.props?.app?.name ||
+    import.meta.env.VITE_APP_NAME ||
+    'Laravel'
+).trim();
 
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => {
+        const pageTitle = title.trim();
+
+        return pageTitle ? `${appName} - ${pageTitle}` : appName;
+    },
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.tsx`,

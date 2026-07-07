@@ -374,7 +374,7 @@ export default function GalleryV2({
 
     return (
         <main className="vault-gallery vault-gallery--v2">
-            <Head title="$SIGMA Vault Gallery V2" />
+            <Head title="Gallery" />
 
             <GalleryHeader user={auth.user} />
 
