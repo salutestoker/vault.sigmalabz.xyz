@@ -8,6 +8,11 @@ use App\Models\GalleryMedia;
 use App\Services\Gallery\GalleryMediaQuery;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Throwable;
 
 class GalleryMediaController extends Controller
 {
@@ -49,6 +54,17 @@ class GalleryMediaController extends Controller
         return new GalleryMediaResource($media);
     }
 
+    public function clipboard(Request $request, GalleryMedia $media): SymfonyResponse
+    {
+        if (! $request->user()?->isAdmin()) {
+            abort_unless($media->visibility->value === 'public', 404);
+        }
+
+        return $this->storedMediaResponse($media)
+            ?? $this->remoteMediaResponse($media)
+            ?? abort(404);
+    }
+
     private function paginatedMedia(
         Request $request,
         GalleryMediaQuery $mediaQuery,
@@ -64,5 +80,80 @@ class GalleryMediaController extends Controller
             ->withQueryString();
 
         return GalleryMediaResource::collection($media);
+    }
+
+    private function storedMediaResponse(GalleryMedia $media): ?SymfonyResponse
+    {
+        if (! $media->media_path) {
+            return null;
+        }
+
+        try {
+            $disk = Storage::disk(config('gallery.media_disk'));
+
+            if (! $disk->exists($media->media_path)) {
+                return null;
+            }
+
+            $stream = $disk->readStream($media->media_path);
+
+            if ($stream === false) {
+                return null;
+            }
+
+            return response()->stream(
+                function () use ($stream): void {
+                    fpassthru($stream);
+
+                    if (is_resource($stream)) {
+                        fclose($stream);
+                    }
+                },
+                200,
+                $this->clipboardHeaders($media),
+            );
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function remoteMediaResponse(GalleryMedia $media): ?SymfonyResponse
+    {
+        $url = $media->original_url ?: $media->media_url ?: $media->preview_url;
+
+        if (! $url) {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(120)->get($url)->throw();
+
+            return response(
+                $response->body(),
+                200,
+                $this->clipboardHeaders(
+                    $media,
+                    $response->header('Content-Type') ?: null,
+                ),
+            );
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function clipboardHeaders(GalleryMedia $media, ?string $contentType = null): array
+    {
+        $filename = Str::ascii($media->filename ?: "gallery-media-{$media->id}");
+        $filename = str_replace(['"', '\\'], '', $filename);
+
+        return [
+            'Cache-Control' => 'public, max-age=3600',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Content-Type' => $contentType ?: ($media->mime_type ?: 'application/octet-stream'),
+            'X-Content-Type-Options' => 'nosniff',
+        ];
     }
 }

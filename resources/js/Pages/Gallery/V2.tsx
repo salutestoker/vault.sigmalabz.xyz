@@ -30,82 +30,96 @@ const mediaSignature = (media: GalleryMedia[]) =>
         )
         .join('|');
 
-const clipboardUrlForMedia = (media: GalleryMedia) =>
-    media.media_url ?? media.thumbnail_url ?? media.preview_url ?? null;
+type ClipboardItemConstructor = {
+    new (items: Record<string, Blob>): ClipboardItem;
+    supports?: (type: string) => boolean;
+};
 
-const copyTextWithCopyEvent = (text: string): boolean => {
-    if (typeof document.execCommand !== 'function') {
-        return false;
-    }
+const canvasToPngBlob = async (canvas: HTMLCanvasElement): Promise<Blob> =>
+    new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+            if (blob) {
+                resolve(blob);
+                return;
+            }
 
-    let didCopy = false;
+            reject(new Error('Unable to prepare image clipboard data.'));
+        }, 'image/png');
+    });
 
-    const handleCopy = (event: ClipboardEvent) => {
-        event.preventDefault();
-        event.clipboardData?.setData('text/plain', text);
-        didCopy = Boolean(event.clipboardData);
-    };
-
-    document.addEventListener('copy', handleCopy, { once: true });
+const imageBlobToPng = async (blob: Blob): Promise<Blob> => {
+    const objectUrl = URL.createObjectURL(blob);
 
     try {
-        window.focus();
-        didCopy = document.execCommand('copy') || didCopy;
+        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const element = new Image();
+            element.onload = () => resolve(element);
+            element.onerror = () =>
+                reject(new Error('Unable to load image clipboard data.'));
+            element.src = objectUrl;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+
+        const context = canvas.getContext('2d');
+
+        if (!context) {
+            throw new Error('Unable to prepare image clipboard data.');
+        }
+
+        context.drawImage(image, 0, 0);
+
+        return await canvasToPngBlob(canvas);
     } finally {
-        document.removeEventListener('copy', handleCopy);
+        URL.revokeObjectURL(objectUrl);
     }
-
-    return didCopy;
 };
 
-const copyTextWithSelection = (text: string): boolean => {
-    if (typeof document.execCommand !== 'function') {
-        return false;
+const fetchMediaClipboardBlob = async (media: GalleryMedia): Promise<Blob> => {
+    const response = await fetch(route('gallery.media.clipboard', media.id), {
+        headers: {
+            Accept: media.type === 'image' ? 'image/*' : 'video/*',
+        },
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to fetch media clipboard data.');
     }
 
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.top = '-9999px';
-    textarea.style.left = '-9999px';
-    textarea.style.opacity = '0';
-    textarea.setAttribute('readonly', '');
-    document.body.appendChild(textarea);
-    textarea.focus({ preventScroll: true });
-    textarea.select();
-    textarea.setSelectionRange(0, text.length);
-    const didCopy = document.execCommand('copy');
-    textarea.remove();
-
-    return didCopy;
+    return await response.blob();
 };
 
-const copyTextFallback = async (text: string) => {
-    if (copyTextWithCopyEvent(text) || copyTextWithSelection(text)) {
-        return;
+const copyBlobToClipboard = async (blob: Blob, mimeType: string) => {
+    const clipboard = window.navigator.clipboard;
+    const ClipboardItemClass = window.ClipboardItem as
+        | ClipboardItemConstructor
+        | undefined;
+
+    if (!clipboard?.write || !ClipboardItemClass) {
+        throw new Error(
+            'This browser does not support media clipboard writes.',
+        );
     }
 
-    const clipboard =
-        typeof window.navigator === 'undefined'
-            ? undefined
-            : window.navigator.clipboard;
-
-    if (clipboard?.writeText) {
-        await clipboard.writeText(text);
-        return;
+    if (ClipboardItemClass.supports && !ClipboardItemClass.supports(mimeType)) {
+        throw new Error(`This browser cannot copy ${mimeType} media.`);
     }
 
-    throw new Error('Clipboard copy failed.');
+    await clipboard.write([new ClipboardItemClass({ [mimeType]: blob })]);
 };
 
 const copyMediaToClipboard = async (media: GalleryMedia) => {
-    const sourceUrl = clipboardUrlForMedia(media);
+    const blob = await fetchMediaClipboardBlob(media);
 
-    if (!sourceUrl) {
-        throw new Error('No media URL available to copy.');
+    if (media.type === 'image') {
+        await copyBlobToClipboard(await imageBlobToPng(blob), 'image/png');
+        return;
     }
 
-    await copyTextFallback(sourceUrl);
+    const mimeType = blob.type || media.mime_type || 'video/mp4';
+
+    await copyBlobToClipboard(blob, mimeType);
 };
 
 const categoryExists = (categories: GalleryCategory[], category: string) =>

@@ -6,6 +6,8 @@ use App\Models\GalleryCategory;
 use App\Models\GalleryMedia;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -92,6 +94,53 @@ class GalleryAccessTest extends TestCase
         $response->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.title', 'Visible helmet');
+    }
+
+    public function test_gallery_clipboard_endpoint_streams_visible_stored_media(): void
+    {
+        Storage::fake('public');
+        config(['gallery.media_disk' => 'public']);
+
+        Storage::disk('public')->put('gallery/media/1/image.jpg', 'image-bytes');
+
+        $media = GalleryMedia::factory()->create([
+            'media_path' => 'gallery/media/1/image.jpg',
+            'mime_type' => 'image/jpeg',
+            'filename' => 'image.jpg',
+        ]);
+
+        $this->get("/gallery/media/{$media->id}/clipboard")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg')
+            ->assertStreamedContent('image-bytes');
+    }
+
+    public function test_gallery_clipboard_endpoint_fetches_remote_media_when_no_copy_exists(): void
+    {
+        Http::fake([
+            'https://cdn.example.test/gallery/image.jpg' => Http::response('remote-bytes', 200, [
+                'Content-Type' => 'image/png',
+            ]),
+        ]);
+
+        $media = GalleryMedia::factory()->create([
+            'media_path' => null,
+            'original_url' => 'https://cdn.example.test/gallery/image.jpg',
+            'mime_type' => 'image/jpeg',
+            'filename' => 'image.jpg',
+        ]);
+
+        $this->get("/gallery/media/{$media->id}/clipboard")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertContent('remote-bytes');
+    }
+
+    public function test_gallery_clipboard_endpoint_hides_private_media_from_guests(): void
+    {
+        $media = GalleryMedia::factory()->hidden()->create();
+
+        $this->get("/gallery/media/{$media->id}/clipboard")->assertNotFound();
     }
 
     public function test_gallery_media_endpoint_allows_hundred_items(): void

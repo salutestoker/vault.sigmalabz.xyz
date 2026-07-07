@@ -50,6 +50,7 @@ Route::get('/auth/discord/callback', [DiscordAuthController::class, 'callback'])
 
 Route::get('/gallery', GalleryV2PageController::class)->name('gallery.index');
 Route::get('/gallery/media', [GalleryMediaController::class, 'v2Index'])->name('gallery.media.index');
+Route::get('/gallery/media/{media}/clipboard', [GalleryMediaController::class, 'clipboard'])->name('gallery.media.clipboard');
 Route::get('/gallery/media/{media}', [GalleryMediaController::class, 'show'])->name('gallery.media.show');
 
 Route::middleware('auth')->group(function () {
