@@ -18,6 +18,9 @@ class ProfileUpdateRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
+            'display_name' => ['nullable', 'string', 'max:255'],
+            'twitter_handle' => ['nullable', 'string', 'max:255'],
+            'profile_image' => ['nullable', 'image', 'max:5120'],
             'email' => [
                 'required',
                 'string',

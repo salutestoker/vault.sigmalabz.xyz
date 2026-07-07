@@ -1,7 +1,7 @@
 import InfiniteWebGLGallery from '@/Components/InfiniteWebGLGallery';
 import { type User } from '@/types';
 import { Head } from '@inertiajs/react';
-import { Gauge, LogIn, UserPlus } from 'lucide-react';
+import { Gauge, Images, LogIn, UserPlus } from 'lucide-react';
 
 interface LandingProps {
     auth: {
@@ -14,6 +14,11 @@ export default function Landing({ auth, galleryImages }: LandingProps) {
     const actions = auth.user
         ? [
               {
+                  href: route('gallery.index'),
+                  icon: <Images className="size-4" aria-hidden="true" />,
+                  label: 'Gallery',
+              },
+              {
                   href: route('dashboard'),
                   icon: <Gauge className="size-4" aria-hidden="true" />,
                   label: 'Dashboard',
@@ -21,6 +26,11 @@ export default function Landing({ auth, galleryImages }: LandingProps) {
               },
           ]
         : [
+              {
+                  href: route('gallery.index'),
+                  icon: <Images className="size-4" aria-hidden="true" />,
+                  label: 'Gallery',
+              },
               {
                   href: route('login'),
                   icon: <LogIn className="size-4" aria-hidden="true" />,

@@ -9,7 +9,7 @@ export default function Authenticated({
     header,
     children,
 }: PropsWithChildren<{ header?: ReactNode }>) {
-    const user = usePage().props.auth.user;
+    const user = usePage().props.auth.user!;
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -33,6 +33,20 @@ export default function Authenticated({
                                 >
                                     Dashboard
                                 </NavLink>
+                                <NavLink
+                                    href={route('gallery.index')}
+                                    active={route().current('gallery.*')}
+                                >
+                                    Gallery
+                                </NavLink>
+                                {user.role === 'admin' && (
+                                    <NavLink
+                                        href={route('admin.dashboard')}
+                                        active={route().current('admin.*')}
+                                    >
+                                        Admin
+                                    </NavLink>
+                                )}
                             </div>
                         </div>
 
@@ -137,6 +151,20 @@ export default function Authenticated({
                         >
                             Dashboard
                         </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('gallery.index')}
+                            active={route().current('gallery.*')}
+                        >
+                            Gallery
+                        </ResponsiveNavLink>
+                        {user.role === 'admin' && (
+                            <ResponsiveNavLink
+                                href={route('admin.dashboard')}
+                                active={route().current('admin.*')}
+                            >
+                                Admin
+                            </ResponsiveNavLink>
+                        )}
                     </div>
 
                     <div className="border-t border-gray-200 pt-4 pb-1">

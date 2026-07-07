@@ -38,6 +38,19 @@ export default function Login({
                 </div>
             )}
 
+            <Link
+                href={route('auth.discord.redirect')}
+                className="mb-6 flex min-h-11 w-full items-center justify-center rounded-md bg-[#5865f2] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4752c4]"
+            >
+                Continue with Discord
+            </Link>
+
+            <div className="mb-6 flex items-center gap-3 text-xs text-gray-500">
+                <span className="h-px flex-1 bg-gray-200" />
+                Email login
+                <span className="h-px flex-1 bg-gray-200" />
+            </div>
+
             <form onSubmit={submit}>
                 <div>
                     <InputLabel htmlFor="email" value="Email" />

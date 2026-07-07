@@ -90,6 +90,7 @@ const clamp = (value: number, min: number, max: number) =>
 const shaderStrengthMultiplier = 640;
 const maxShaderStrength = 2.35;
 const autoScrollSpeed = 1;
+const targetFrameDuration = 1000 / 60;
 
 const getShaderStrength = (velocity: number, screenWidth: number) =>
     clamp(
@@ -473,6 +474,7 @@ class GalleryRuntime {
     };
     private speed = autoScrollSpeed;
     private start = 0;
+    private lastFrameTime = 0;
     private viewport: ViewportSize = {
         height: 0,
         width: 0,
@@ -620,8 +622,18 @@ class GalleryRuntime {
         window.removeEventListener('touchend', this.boundOnTouchEnd);
     }
 
-    private update = () => {
-        this.scroll.target += this.speed;
+    private update = (time = performance.now()) => {
+        const frameDelta =
+            this.lastFrameTime > 0
+                ? clamp(
+                      (time - this.lastFrameTime) / targetFrameDuration,
+                      0.25,
+                      2,
+                  )
+                : 1;
+
+        this.lastFrameTime = time;
+        this.scroll.target += this.speed * frameDelta;
         this.scroll.current = lerp(
             this.scroll.current,
             this.scroll.target,
@@ -766,16 +778,24 @@ export default function InfiniteWebGLGallery({
             >
                 <div className="fixed h-screen w-screen bg-black opacity-85"></div>
                 <div className="infinite-gallery__header fixed flex h-screen w-screen flex-col items-center justify-center">
-                    <img
-                        className="mx-auto mb-3 max-w-[100px]"
-                        src="/images/sigma-labz-logo.png"
-                        alt=""
-                    />
-                    <img
-                        className="mx-auto w-[800px] max-w-full"
-                        src="/images/sigma-vault-logo.png"
-                        alt=""
-                    />
+                    <div
+                        className="infinite-gallery__enter-link-wrap"
+                        // href={route('gallery.index')}
+                    >
+                        <img
+                            className="mx-auto mb-3 max-w-[100px]"
+                            src="/images/sigma-labz-logo.png"
+                            alt=""
+                        />
+                        <img
+                            className="mx-auto w-[800px] max-w-full"
+                            src="/images/sigma-vault-logo.png"
+                            alt=""
+                        />
+                        {/*<span className="infinite-gallery__enter-link uppercase">*/}
+                        {/*    Enter Here*/}
+                        {/*</span>*/}
+                    </div>
                 </div>
 
                 <div
