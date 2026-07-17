@@ -47,12 +47,16 @@ export default function GalleryIndex({
     const [media, setMedia] = useState(initialMedia.data);
     const [meta, setMeta] = useState(initialMedia.meta);
     const [isLoading, setIsLoading] = useState(false);
-    const [selectedMedia, setSelectedMedia] = useState<GalleryMedia | null>(
+    const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(
         null,
     );
     const didMountRef = useRef(false);
 
     const serializedFilters = useMemo(() => JSON.stringify(filters), [filters]);
+    const selectedMedia =
+        selectedMediaIndex === null
+            ? null
+            : (media[selectedMediaIndex] ?? null);
 
     const fetchMedia = useCallback(
         async (page = 1, append = false) => {
@@ -117,6 +121,31 @@ export default function GalleryIndex({
         void fetchMedia(meta.current_page + 1, true);
     }, [fetchMedia, hasMore, isLoading, meta.current_page]);
 
+    const openMedia = useCallback(
+        (selectedMedia: GalleryMedia) => {
+            const nextIndex = media.findIndex(
+                (item) => item.id === selectedMedia.id,
+            );
+
+            if (nextIndex >= 0) {
+                setSelectedMediaIndex(nextIndex);
+            }
+        },
+        [media],
+    );
+
+    const handleFiltersChange = useCallback(
+        (
+            nextFilters:
+                | GalleryFilters
+                | ((current: GalleryFilters) => GalleryFilters),
+        ) => {
+            setSelectedMediaIndex(null);
+            setFilters(nextFilters);
+        },
+        [],
+    );
+
     return (
         <main className="vault-gallery">
             <Head title="Gallery" />
@@ -128,7 +157,10 @@ export default function GalleryIndex({
                     categories={categories}
                     active={filters.category}
                     onChange={(category) =>
-                        setFilters((current) => ({ ...current, category }))
+                        handleFiltersChange((current) => ({
+                            ...current,
+                            category,
+                        }))
                     }
                 />
 
@@ -137,7 +169,7 @@ export default function GalleryIndex({
                     creators={creators.data}
                     filters={filters}
                     isAuthenticated={Boolean(auth.user)}
-                    onChange={setFilters}
+                    onChange={handleFiltersChange}
                 />
 
                 {isLoading && media.length === 0 ? (
@@ -147,13 +179,10 @@ export default function GalleryIndex({
                         media={media}
                         isLoading={isLoading}
                         hasMore={hasMore}
-                        onOpen={setSelectedMedia}
+                        onOpen={openMedia}
                         onLoadMore={loadMore}
                         fallback={
-                            <MediaGrid
-                                media={media}
-                                onOpen={setSelectedMedia}
-                            />
+                            <MediaGrid media={media} onOpen={openMedia} />
                         }
                     />
                 ) : (
@@ -163,7 +192,10 @@ export default function GalleryIndex({
 
             <MediaLightbox
                 media={selectedMedia}
-                onClose={() => setSelectedMedia(null)}
+                items={media}
+                selectedIndex={selectedMediaIndex}
+                onSelectIndex={setSelectedMediaIndex}
+                onClose={() => setSelectedMediaIndex(null)}
             />
         </main>
     );

@@ -6,6 +6,7 @@ import GalleryV2Scene, {
     type GalleryV2SceneHandle,
 } from '@/Components/Gallery/GalleryV2Scene';
 import MediaGrid from '@/Components/Gallery/MediaGrid';
+import MediaLightbox from '@/Components/Gallery/MediaLightbox';
 import { type PageProps } from '@/types';
 import {
     type GalleryCategory,
@@ -29,98 +30,6 @@ const mediaSignature = (media: GalleryMedia[]) =>
                 `${item.id}:${item.type}:${item.media_url ?? ''}:${item.preview_url ?? ''}:${item.thumbnail_url ?? ''}`,
         )
         .join('|');
-
-type ClipboardItemConstructor = {
-    new (items: Record<string, Blob>): ClipboardItem;
-    supports?: (type: string) => boolean;
-};
-
-const canvasToPngBlob = async (canvas: HTMLCanvasElement): Promise<Blob> =>
-    new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-            if (blob) {
-                resolve(blob);
-                return;
-            }
-
-            reject(new Error('Unable to prepare image clipboard data.'));
-        }, 'image/png');
-    });
-
-const imageBlobToPng = async (blob: Blob): Promise<Blob> => {
-    const objectUrl = URL.createObjectURL(blob);
-
-    try {
-        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const element = new Image();
-            element.onload = () => resolve(element);
-            element.onerror = () =>
-                reject(new Error('Unable to load image clipboard data.'));
-            element.src = objectUrl;
-        });
-        const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-
-        const context = canvas.getContext('2d');
-
-        if (!context) {
-            throw new Error('Unable to prepare image clipboard data.');
-        }
-
-        context.drawImage(image, 0, 0);
-
-        return await canvasToPngBlob(canvas);
-    } finally {
-        URL.revokeObjectURL(objectUrl);
-    }
-};
-
-const fetchMediaClipboardBlob = async (media: GalleryMedia): Promise<Blob> => {
-    const response = await fetch(route('gallery.media.clipboard', media.id), {
-        headers: {
-            Accept: media.type === 'image' ? 'image/*' : 'video/*',
-        },
-    });
-
-    if (!response.ok) {
-        throw new Error('Unable to fetch media clipboard data.');
-    }
-
-    return await response.blob();
-};
-
-const copyBlobToClipboard = async (blob: Blob, mimeType: string) => {
-    const clipboard = window.navigator.clipboard;
-    const ClipboardItemClass = window.ClipboardItem as
-        | ClipboardItemConstructor
-        | undefined;
-
-    if (!clipboard?.write || !ClipboardItemClass) {
-        throw new Error(
-            'This browser does not support media clipboard writes.',
-        );
-    }
-
-    if (ClipboardItemClass.supports && !ClipboardItemClass.supports(mimeType)) {
-        throw new Error(`This browser cannot copy ${mimeType} media.`);
-    }
-
-    await clipboard.write([new ClipboardItemClass({ [mimeType]: blob })]);
-};
-
-const copyMediaToClipboard = async (media: GalleryMedia) => {
-    const blob = await fetchMediaClipboardBlob(media);
-
-    if (media.type === 'image') {
-        await copyBlobToClipboard(await imageBlobToPng(blob), 'image/png');
-        return;
-    }
-
-    const mimeType = blob.type || media.mime_type || 'video/mp4';
-
-    await copyBlobToClipboard(blob, mimeType);
-};
 
 const categoryExists = (categories: GalleryCategory[], category: string) =>
     categories.some((item) => item.slug === category);
@@ -194,6 +103,9 @@ export default function GalleryV2({
     const [media, setMedia] = useState(initialMedia.data);
     const [isLoading, setIsLoading] = useState(false);
     const [clipboardToast, setClipboardToast] = useState<string | null>(null);
+    const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(
+        null,
+    );
     const didMountRef = useRef(false);
     const fetchRequestRef = useRef(0);
     const filterRevisionRef = useRef(0);
@@ -202,6 +114,10 @@ export default function GalleryV2({
     const clipboardToastTimeoutRef = useRef<number | null>(null);
 
     const serializedFilters = useMemo(() => JSON.stringify(filters), [filters]);
+    const selectedMedia =
+        selectedMediaIndex === null
+            ? null
+            : (media[selectedMediaIndex] ?? null);
 
     const updateFilters = useCallback(
         (
@@ -303,21 +219,22 @@ export default function GalleryV2({
     }, []);
 
     const handleMediaClick = useCallback(
-        async (media: GalleryMedia) => {
-            try {
-                await copyMediaToClipboard(media);
-                showClipboardToast(`${media.type} copied to clipboard.`);
-            } catch (error) {
-                console.error('Unable to copy gallery media.', error);
-                showClipboardToast(`Unable to copy ${media.type}.`);
+        (selectedMedia: GalleryMedia) => {
+            const nextIndex = media.findIndex(
+                (item) => item.id === selectedMedia.id,
+            );
+
+            if (nextIndex >= 0) {
+                setSelectedMediaIndex(nextIndex);
             }
         },
-        [showClipboardToast],
+        [media],
     );
 
     const handleCategoryChange = useCallback(
         (category: string) => {
             writeCategoryToUrl(category);
+            setSelectedMediaIndex(null);
 
             updateFilters((current) =>
                 current.category === category
@@ -339,6 +256,7 @@ export default function GalleryV2({
                 DEFAULT_CATEGORY,
             );
 
+            setSelectedMediaIndex(null);
             updateFilters((current) =>
                 current.category === category
                     ? current
@@ -414,6 +332,15 @@ export default function GalleryV2({
                     {clipboardToast}
                 </div>
             )}
+
+            <MediaLightbox
+                media={selectedMedia}
+                items={media}
+                selectedIndex={selectedMediaIndex}
+                onSelectIndex={setSelectedMediaIndex}
+                onClose={() => setSelectedMediaIndex(null)}
+                onStatus={showClipboardToast}
+            />
         </main>
     );
 }
