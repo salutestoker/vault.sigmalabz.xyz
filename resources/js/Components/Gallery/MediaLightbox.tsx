@@ -43,7 +43,7 @@ const mediaDimensionsStyle = (media: GalleryMedia): LightboxMediaStyle => {
     return style;
 };
 
-const xProfileUrl = (handle?: string | null): string | null => {
+const xHandle = (handle?: string | null): string | null => {
     if (!handle) {
         return null;
     }
@@ -59,16 +59,29 @@ const xProfileUrl = (handle?: string | null): string | null => {
 
     normalized = normalized.replace(/[^A-Za-z0-9_]/g, '');
 
+    return normalized || null;
+};
+
+const xProfileUrl = (handle?: string | null): string | null => {
+    const normalized = xHandle(handle);
+
     return normalized ? `https://x.com/${normalized}` : null;
 };
 
-const xPostText = (media: GalleryMedia): string => {
+const xCreatorCredit = (media: GalleryMedia): string | null => {
+    const creatorHandle = xHandle(media.creator?.twitter_handle);
+
+    if (creatorHandle) {
+        return `created by @${creatorHandle}`;
+    }
+
     const creatorName = media.creator?.display_name?.trim();
 
-    return [
-        'Straight from the SIGMA VAULT',
-        creatorName ? `created by ${creatorName}` : null,
-    ]
+    return creatorName ? `created by ${creatorName}` : null;
+};
+
+const xPostText = (media: GalleryMedia): string => {
+    return ['Straight from the SIGMA VAULT', xCreatorCredit(media)]
         .filter(Boolean)
         .join(' - ')
         .concat(` | ${SIGMA_VAULT_X_HANDLE} ${SIGMA_VAULT_SHARE_URL}`);
