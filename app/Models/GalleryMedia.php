@@ -124,6 +124,14 @@ class GalleryMedia extends Model
             ]);
     }
 
+    public function scopeStoredForGallery(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query): void {
+            $query->whereNotNull('media_path')
+                ->orWhereNotNull('thumbnail_path');
+        });
+    }
+
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
         $search = trim((string) $search);

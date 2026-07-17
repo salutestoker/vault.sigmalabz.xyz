@@ -54,12 +54,14 @@ class GalleryV2PageController extends Controller
         $imageCategorySlugs = GalleryCategory::query()
             ->whereHas('media', fn (Builder $query) => $query
                 ->readyForGallery()
+                ->storedForGallery()
                 ->where('type', GalleryMediaType::Image->value)
             )
             ->pluck('slug');
 
         $hasVideos = GalleryMedia::query()
             ->readyForGallery()
+            ->storedForGallery()
             ->where('type', GalleryMediaType::Video->value)
             ->exists();
 

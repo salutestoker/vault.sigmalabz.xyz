@@ -18,14 +18,9 @@ use Inertia\Inertia;
 Route::get('/', function () {
     $galleryImages = GalleryMedia::query()
         ->readyForGallery()
+        ->storedForGallery()
         ->whereHas('category', fn ($query) => $query->whereIn('slug', ['sigma', 'aura']))
         ->where('type', GalleryMediaType::Image->value)
-        ->where(function ($query): void {
-            $query->whereNotNull('media_path')
-                ->orWhereNotNull('original_url')
-                ->orWhereNotNull('thumbnail_path')
-                ->orWhereNotNull('preview_url');
-        })
         ->inRandomOrder()
         ->limit(25)
         ->get()

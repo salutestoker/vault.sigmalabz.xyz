@@ -12,11 +12,16 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 class GalleryMediaStorageService
 {
     public function copyRemoteMedia(GalleryMedia $media): void
     {
+        if ($this->hasStoredMedia($media)) {
+            return;
+        }
+
         if (! $media->original_url) {
             throw new RuntimeException('Gallery media has no original URL to copy.');
         }
@@ -35,9 +40,13 @@ class GalleryMediaStorageService
 
         $disk->put($mediaPath, $bytes);
 
-        $thumbnailPath = $media->type === GalleryMediaType::Video
-            ? $this->thumbnailVideo($media, $mediaPath)
-            : $this->thumbnailImage($media, $mediaPath);
+        try {
+            $thumbnailPath = $media->type === GalleryMediaType::Video
+                ? $this->thumbnailVideo($media, $mediaPath)
+                : $this->thumbnailImage($media, $mediaPath);
+        } catch (Throwable) {
+            $thumbnailPath = $mediaPath;
+        }
 
         $media->update([
             'media_path' => $mediaPath,
@@ -50,6 +59,19 @@ class GalleryMediaStorageService
 
         if (config('gallery.ai.enabled')) {
             AnalyzeGalleryMedia::dispatch($media->fresh())->afterCommit();
+        }
+    }
+
+    public function hasStoredMedia(GalleryMedia $media): bool
+    {
+        if (! $media->media_path) {
+            return false;
+        }
+
+        try {
+            return Storage::disk(config('gallery.media_disk'))->exists($media->media_path);
+        } catch (Throwable) {
+            return false;
         }
     }
 
@@ -75,7 +97,7 @@ class GalleryMediaStorageService
     {
         $disk = Storage::disk(config('gallery.media_disk'));
 
-        if (! method_exists($disk, 'path') || ! class_exists(\Imagick::class)) {
+        if (! $this->isLocalMediaDisk() || ! method_exists($disk, 'path') || ! class_exists(\Imagick::class)) {
             return $mediaPath;
         }
 
@@ -98,7 +120,7 @@ class GalleryMediaStorageService
     {
         $disk = Storage::disk(config('gallery.media_disk'));
 
-        if (! method_exists($disk, 'path')) {
+        if (! $this->isLocalMediaDisk() || ! method_exists($disk, 'path')) {
             return null;
         }
 
@@ -125,5 +147,12 @@ class GalleryMediaStorageService
         $process->run();
 
         return $process->isSuccessful() && $disk->exists($thumbnailPath) ? $thumbnailPath : null;
+    }
+
+    private function isLocalMediaDisk(): bool
+    {
+        $disk = (string) config('gallery.media_disk');
+
+        return config("filesystems.disks.{$disk}.driver") === 'local';
     }
 }

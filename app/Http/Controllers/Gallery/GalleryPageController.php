@@ -36,7 +36,9 @@ class GalleryPageController extends Controller
             'categories' => $this->categories(),
             'creators' => CreatorResource::collection(
                 Creator::query()
-                    ->withCount(['media' => fn ($query) => $query->readyForGallery()])
+                    ->withCount(['media' => fn ($query) => $query
+                        ->readyForGallery()
+                        ->storedForGallery()])
                     ->having('media_count', '>', 0)
                     ->orderBy('display_name')
                     ->get(),
@@ -78,7 +80,9 @@ class GalleryPageController extends Controller
     {
         return GalleryMediaColor::query()
             ->selectRaw('LOWER(hex) as hex, COUNT(*) as count')
-            ->whereHas('media', fn ($query) => $query->readyForGallery())
+            ->whereHas('media', fn ($query) => $query
+                ->readyForGallery()
+                ->storedForGallery())
             ->groupByRaw('LOWER(hex)')
             ->orderByDesc('count')
             ->limit(10)

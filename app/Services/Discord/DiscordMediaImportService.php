@@ -9,6 +9,7 @@ use App\Models\Creator;
 use App\Models\DiscordSyncRun;
 use App\Models\GalleryCategory;
 use App\Models\GalleryMedia;
+use App\Services\Gallery\GalleryMediaStorageService;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -18,13 +19,17 @@ class DiscordMediaImportService
 {
     public function __construct(
         private readonly DiscordApiService $discord,
+        private readonly GalleryMediaStorageService $storage,
     ) {}
 
-    public function sync(DiscordSyncRun $run): void
+    public function sync(DiscordSyncRun $run, bool $incremental = false): void
     {
         $run->update([
             'status' => 'running',
             'started_at' => now(),
+            'metadata' => array_merge($run->metadata ?? [], [
+                'incremental' => $incremental,
+            ]),
         ]);
 
         try {
@@ -37,7 +42,7 @@ class DiscordMediaImportService
             $run->increment('channels_scanned', $mediaChannels->count());
 
             foreach ($mediaChannels as $channel) {
-                $this->syncChannel($run, $channel);
+                $this->syncChannel($run, $channel, $incremental);
             }
 
             $run->update([
@@ -80,7 +85,7 @@ class DiscordMediaImportService
     /**
      * @param  array<string, mixed>  $channel
      */
-    private function syncChannel(DiscordSyncRun $run, array $channel): void
+    private function syncChannel(DiscordSyncRun $run, array $channel, bool $incremental): void
     {
         $before = null;
 
@@ -89,7 +94,9 @@ class DiscordMediaImportService
             $run->increment('messages_scanned', count($messages));
 
             foreach ($messages as $message) {
-                $this->syncMessage($run, $channel, $message);
+                if ($this->syncMessage($run, $channel, $message, $incremental)) {
+                    return;
+                }
             }
 
             $before = Arr::last($messages)['id'] ?? null;
@@ -100,8 +107,10 @@ class DiscordMediaImportService
      * @param  array<string, mixed>  $channel
      * @param  array<string, mixed>  $message
      */
-    private function syncMessage(DiscordSyncRun $run, array $channel, array $message): void
+    private function syncMessage(DiscordSyncRun $run, array $channel, array $message, bool $incremental): bool
     {
+        $supportedAttachments = [];
+
         foreach (($message['attachments'] ?? []) as $attachment) {
             if (! $this->isSupportedAttachment($attachment)) {
                 $run->increment('media_skipped');
@@ -109,24 +118,80 @@ class DiscordMediaImportService
                 continue;
             }
 
+            $supportedAttachments[] = $attachment;
+        }
+
+        if ($supportedAttachments === []) {
+            return false;
+        }
+
+        $storedBoundary = $incremental && collect($supportedAttachments)
+            ->every(function (array $attachment): bool {
+                $media = $this->existingMediaForAttachment($attachment);
+
+                return $media !== null && $this->storage->hasStoredMedia($media);
+            });
+
+        foreach ($supportedAttachments as $attachment) {
+            $existingMedia = $this->existingMediaForAttachment($attachment);
+
+            if ($existingMedia && $this->storage->hasStoredMedia($existingMedia)) {
+                $this->createSyncItem($run, $existingMedia, $attachment, 'skipped', 'stored');
+                $run->increment('media_skipped');
+
+                continue;
+            }
+
             $media = $this->upsertMedia($channel, $message, $attachment);
 
-            $run->items()->create([
-                'gallery_media_id' => $media->id,
-                'source_channel_id' => $media->source_channel_id,
-                'source_message_id' => $media->source_message_id,
-                'source_attachment_id' => $media->source_attachment_id,
-                'status' => 'queued',
-                'action' => $media->wasRecentlyCreated ? 'created' : 'updated',
-                'metadata' => [
-                    'filename' => $attachment['filename'] ?? null,
-                    'content_type' => $attachment['content_type'] ?? null,
-                ],
-            ]);
+            $this->createSyncItem(
+                $run,
+                $media,
+                $attachment,
+                'queued',
+                $media->wasRecentlyCreated ? 'created' : 'updated',
+            );
 
             $run->increment($media->wasRecentlyCreated ? 'media_imported' : 'media_skipped');
             ImportDiscordMediaAttachment::dispatch($media)->afterCommit();
         }
+
+        return $storedBoundary;
+    }
+
+    /**
+     * @param  array<string, mixed>  $attachment
+     */
+    private function existingMediaForAttachment(array $attachment): ?GalleryMedia
+    {
+        return GalleryMedia::query()
+            ->where('source_provider', 'discord')
+            ->where('source_attachment_id', (string) $attachment['id'])
+            ->first();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attachment
+     */
+    private function createSyncItem(
+        DiscordSyncRun $run,
+        GalleryMedia $media,
+        array $attachment,
+        string $status,
+        string $action,
+    ): void {
+        $run->items()->create([
+            'gallery_media_id' => $media->id,
+            'source_channel_id' => $media->source_channel_id,
+            'source_message_id' => $media->source_message_id,
+            'source_attachment_id' => $media->source_attachment_id,
+            'status' => $status,
+            'action' => $action,
+            'metadata' => [
+                'filename' => $attachment['filename'] ?? null,
+                'content_type' => $attachment['content_type'] ?? null,
+            ],
+        ]);
     }
 
     /**

@@ -44,17 +44,17 @@ class GalleryAccessTest extends TestCase
 
         $visibleUrls = collect(range(1, 30))
             ->map(function (int $index) use ($aura, $sigma): string {
-                $url = "https://cdn.example.test/gallery/visible-{$index}.jpg";
+                $path = "gallery/media/visible-{$index}/image.jpg";
 
                 GalleryMedia::factory()->create([
                     'gallery_category_id' => $index % 2 === 0 ? $sigma->id : $aura->id,
-                    'original_url' => $url,
-                    'preview_url' => $url,
-                    'media_path' => null,
+                    'original_url' => "https://cdn.example.test/gallery/visible-{$index}.jpg",
+                    'preview_url' => "https://cdn.example.test/gallery/visible-{$index}.jpg",
+                    'media_path' => $path,
                     'thumbnail_path' => null,
                 ]);
 
-                return $url;
+                return url("/storage/{$path}");
             });
 
         GalleryMedia::factory()->hidden()->create([

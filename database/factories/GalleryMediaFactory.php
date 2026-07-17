@@ -19,6 +19,9 @@ class GalleryMediaFactory extends Factory
 
     public function definition(): array
     {
+        $filename = fake()->slug().'.jpg';
+        $mediaId = fake()->unique()->numberBetween(100000, 999999999);
+
         return [
             'creator_id' => Creator::factory(),
             'gallery_category_id' => GalleryCategory::factory(),
@@ -33,10 +36,11 @@ class GalleryMediaFactory extends Factory
             'source_attachment_id' => (string) fake()->unique()->numberBetween(100000, 999999999),
             'source_author_id' => (string) fake()->numberBetween(100000, 999999999),
             'original_url' => '/images/tmp/image-1201.jpg',
-            'thumbnail_path' => null,
+            'media_path' => "gallery/media/{$mediaId}/{$filename}",
+            'thumbnail_path' => "gallery/media/{$mediaId}/thumbnail.jpg",
             'preview_url' => '/images/tmp/image-1201.jpg',
             'mime_type' => 'image/jpeg',
-            'filename' => fake()->slug().'.jpg',
+            'filename' => $filename,
             'title' => fake()->words(3, true),
             'description' => fake()->sentence(),
             'ai_search_text' => fake()->sentence().' helmet purple poster',

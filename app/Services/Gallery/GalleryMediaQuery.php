@@ -23,6 +23,7 @@ class GalleryMediaQuery
 
         $query = GalleryMedia::query()
             ->readyForGallery()
+            ->storedForGallery()
             ->with([
                 'category:id,slug,name',
                 'creator:id,display_name,twitter_handle,discord_username,avatar_url,profile_image_path',

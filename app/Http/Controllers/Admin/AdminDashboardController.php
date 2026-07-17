@@ -19,7 +19,7 @@ class AdminDashboardController extends Controller
                 'users' => User::count(),
                 'creators' => Creator::count(),
                 'media' => GalleryMedia::count(),
-                'visibleMedia' => GalleryMedia::readyForGallery()->count(),
+                'visibleMedia' => GalleryMedia::readyForGallery()->storedForGallery()->count(),
                 'failedSyncs' => DiscordSyncRun::where('status', 'failed')->count(),
             ],
             'recentSyncs' => DiscordSyncRun::latest()->limit(8)->get(),
