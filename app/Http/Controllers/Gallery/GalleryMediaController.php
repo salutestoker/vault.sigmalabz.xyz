@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Gallery;
 
+use App\Enums\GalleryMediaType;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\GalleryMediaResource;
 use App\Models\GalleryMedia;
@@ -56,9 +57,22 @@ class GalleryMediaController extends Controller
 
     public function clipboard(Request $request, GalleryMedia $media): SymfonyResponse
     {
-        if (! $request->user()?->isAdmin()) {
-            abort_unless($media->visibility->value === 'public', 404);
+        $this->abortUnlessViewable($request, $media);
+
+        if ($media->type === GalleryMediaType::Video) {
+            return response()->json([
+                'message' => 'Video file clipboard copies are not supported. Copy the video URL instead.',
+            ], SymfonyResponse::HTTP_UNPROCESSABLE_ENTITY);
         }
+
+        return $this->storedMediaResponse($media)
+            ?? $this->remoteMediaResponse($media)
+            ?? abort(404);
+    }
+
+    public function share(Request $request, GalleryMedia $media): SymfonyResponse
+    {
+        $this->abortUnlessViewable($request, $media);
 
         return $this->storedMediaResponse($media)
             ?? $this->remoteMediaResponse($media)
@@ -67,9 +81,7 @@ class GalleryMediaController extends Controller
 
     public function asset(Request $request, GalleryMedia $media): SymfonyResponse
     {
-        if (! $request->user()?->isAdmin()) {
-            abort_unless($media->visibility->value === 'public', 404);
-        }
+        $this->abortUnlessViewable($request, $media);
 
         return $this->storedMediaResponse($media) ?? abort(404);
     }
@@ -89,6 +101,13 @@ class GalleryMediaController extends Controller
             ->withQueryString();
 
         return GalleryMediaResource::collection($media);
+    }
+
+    private function abortUnlessViewable(Request $request, GalleryMedia $media): void
+    {
+        if (! $request->user()?->isAdmin()) {
+            abort_unless($media->visibility->value === 'public', 404);
+        }
     }
 
     private function storedMediaResponse(GalleryMedia $media): ?SymfonyResponse

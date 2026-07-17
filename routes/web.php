@@ -48,6 +48,7 @@ Route::get('/gallery', GalleryV2PageController::class)->name('gallery.index');
 Route::get('/gallery/media', [GalleryMediaController::class, 'v2Index'])->name('gallery.media.index');
 Route::get('/gallery/media/{media}/asset', [GalleryMediaController::class, 'asset'])->name('gallery.media.asset');
 Route::get('/gallery/media/{media}/clipboard', [GalleryMediaController::class, 'clipboard'])->name('gallery.media.clipboard');
+Route::get('/gallery/media/{media}/share', [GalleryMediaController::class, 'share'])->name('gallery.media.share');
 Route::get('/gallery/media/{media}', [GalleryMediaController::class, 'show'])->name('gallery.media.show');
 
 Route::middleware('auth')->group(function () {

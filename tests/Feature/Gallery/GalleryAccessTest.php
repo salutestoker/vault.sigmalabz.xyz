@@ -134,6 +134,37 @@ class GalleryAccessTest extends TestCase
             ->assertStreamedContent('image-bytes');
     }
 
+    public function test_gallery_clipboard_endpoint_rejects_video_file_copies(): void
+    {
+        $media = GalleryMedia::factory()->video()->create();
+
+        $this->getJson("/gallery/media/{$media->id}/clipboard")
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                'Video file clipboard copies are not supported. Copy the video URL instead.',
+            );
+    }
+
+    public function test_gallery_share_endpoint_streams_visible_stored_video_media(): void
+    {
+        Storage::fake('public');
+        config(['gallery.media_disk' => 'public']);
+
+        Storage::disk('public')->put('gallery/media/1/video.mp4', 'video-bytes');
+
+        $media = GalleryMedia::factory()->video()->create([
+            'media_path' => 'gallery/media/1/video.mp4',
+            'mime_type' => 'video/mp4',
+            'filename' => 'video.mp4',
+        ]);
+
+        $this->get("/gallery/media/{$media->id}/share")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'video/mp4')
+            ->assertStreamedContent('video-bytes');
+    }
+
     public function test_gallery_clipboard_endpoint_fetches_remote_media_when_no_copy_exists(): void
     {
         Http::fake([
@@ -160,6 +191,13 @@ class GalleryAccessTest extends TestCase
         $media = GalleryMedia::factory()->hidden()->create();
 
         $this->get("/gallery/media/{$media->id}/clipboard")->assertNotFound();
+    }
+
+    public function test_gallery_share_endpoint_hides_private_media_from_guests(): void
+    {
+        $media = GalleryMedia::factory()->hidden()->create();
+
+        $this->get("/gallery/media/{$media->id}/share")->assertNotFound();
     }
 
     public function test_gallery_media_endpoint_allows_hundred_items(): void

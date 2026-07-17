@@ -1,7 +1,11 @@
 import Toast, { useToast } from '@/Components/Toast';
-import { copyMediaToClipboard } from '@/lib/galleryClipboard';
+import {
+    canAttemptNativeFileShare,
+    copyMediaToClipboard,
+    shareMediaFile,
+} from '@/lib/galleryClipboard';
 import { type GalleryMedia } from '@/types/gallery';
-import { useCallback, useEffect, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 
 interface MediaLightboxProps {
     media: GalleryMedia | null;
@@ -13,9 +17,31 @@ interface MediaLightboxProps {
 }
 
 const LIGHTBOX_STATUS_DURATION = 2400;
+const LIGHTBOX_EXIT_DURATION = 180;
+const SIGMA_VAULT_SHARE_URL = 'https://vault.sigmalabz.xyz';
+const SIGMA_VAULT_X_HANDLE = '@SigmaOnXRPL';
+
+type LightboxMediaStyle = CSSProperties & {
+    '--lightbox-media-height'?: string;
+    '--lightbox-media-width'?: string;
+};
 
 const mediaDisplayUrl = (media: GalleryMedia): string | null =>
     media.media_url ?? media.thumbnail_url ?? media.preview_url ?? null;
+
+const mediaDimensionsStyle = (media: GalleryMedia): LightboxMediaStyle => {
+    const style: LightboxMediaStyle = {};
+
+    if (media.width && media.width > 0) {
+        style['--lightbox-media-width'] = `${media.width}px`;
+    }
+
+    if (media.height && media.height > 0) {
+        style['--lightbox-media-height'] = `${media.height}px`;
+    }
+
+    return style;
+};
 
 const xProfileUrl = (handle?: string | null): string | null => {
     if (!handle) {
@@ -36,28 +62,28 @@ const xProfileUrl = (handle?: string | null): string | null => {
     return normalized ? `https://x.com/${normalized}` : null;
 };
 
-const publicAssetUrl = (media: GalleryMedia): string => {
-    const assetPath = route('gallery.media.asset', media.id);
+const xPostText = (media: GalleryMedia): string => {
+    const creatorName = media.creator?.display_name?.trim();
 
-    return new URL(assetPath, window.location.origin).toString();
+    return [
+        'Straight from the SIGMA VAULT',
+        creatorName ? `created by ${creatorName}` : null,
+    ]
+        .filter(Boolean)
+        .join(' - ')
+        .concat(` | ${SIGMA_VAULT_X_HANDLE} ${SIGMA_VAULT_SHARE_URL}`);
 };
 
 const xIntentUrl = (media: GalleryMedia): string => {
     const url = new URL('https://x.com/intent/tweet');
-    const creatorName = media.creator?.display_name;
-    const text = [
-        media.title,
-        creatorName ? `created by ${creatorName}` : null,
-        '$SIGMA VAULT',
-    ]
-        .filter(Boolean)
-        .join(' - ');
 
-    url.searchParams.set('text', text);
-    url.searchParams.set('url', publicAssetUrl(media));
+    url.searchParams.set('text', xPostText(media));
 
     return url.toString();
 };
+
+const isShareAbortError = (error: unknown): boolean =>
+    error instanceof DOMException && error.name === 'AbortError';
 
 export default function MediaLightbox({
     media,
@@ -68,6 +94,8 @@ export default function MediaLightbox({
     onStatus,
 }: MediaLightboxProps) {
     const [isCopying, setIsCopying] = useState(false);
+    const [isPosting, setIsPosting] = useState(false);
+    const [exitingMedia, setExitingMedia] = useState<GalleryMedia | null>(null);
     const { showToast: showLocalToast, toast: localToast } = useToast(
         LIGHTBOX_STATUS_DURATION,
     );
@@ -76,7 +104,7 @@ export default function MediaLightbox({
         media && collection.length > 0
             ? collection.findIndex((item) => item.id === media.id)
             : -1;
-    const activeIndex =
+    const currentActiveIndex =
         selectedIndex !== null && selectedIndex >= 0
             ? selectedIndex
             : fallbackIndex >= 0
@@ -84,12 +112,36 @@ export default function MediaLightbox({
               : media
                 ? 0
                 : -1;
-    const activeMedia = activeIndex >= 0 ? collection[activeIndex] : media;
+    const currentActiveMedia =
+        currentActiveIndex >= 0
+            ? (collection[currentActiveIndex] ?? null)
+            : media;
+    const activeMedia = currentActiveMedia ?? exitingMedia;
+    const isClosing = !currentActiveMedia && Boolean(exitingMedia);
     const canNavigate =
-        collection.length > 1 && activeIndex >= 0 && Boolean(onSelectIndex);
+        Boolean(currentActiveMedia) &&
+        collection.length > 1 &&
+        currentActiveIndex >= 0 &&
+        Boolean(onSelectIndex);
     const creatorName = activeMedia?.creator?.display_name;
     const creatorProfileUrl = xProfileUrl(activeMedia?.creator?.twitter_handle);
     const activeMediaUrl = activeMedia ? mediaDisplayUrl(activeMedia) : null;
+    const activeMediaKey = activeMedia
+        ? [
+              activeMedia.id,
+              activeMedia.type,
+              activeMedia.media_url ?? '',
+              activeMedia.thumbnail_url ?? '',
+              activeMedia.preview_url ?? '',
+          ].join(':')
+        : null;
+    const lightboxClassName = [
+        'vault-gallery__lightbox',
+        isClosing ? 'is-closing' : null,
+        creatorName ? 'has-credit' : null,
+    ]
+        .filter(Boolean)
+        .join(' ');
 
     const showStatus = useCallback(
         (message: string) => {
@@ -103,6 +155,14 @@ export default function MediaLightbox({
         [onStatus, showLocalToast],
     );
 
+    const handleRequestClose = useCallback(() => {
+        if (currentActiveMedia) {
+            setExitingMedia(currentActiveMedia);
+        }
+
+        onClose();
+    }, [currentActiveMedia, onClose]);
+
     const selectOffset = useCallback(
         (offset: number) => {
             if (!canNavigate || !onSelectIndex) {
@@ -110,11 +170,12 @@ export default function MediaLightbox({
             }
 
             const nextIndex =
-                (activeIndex + offset + collection.length) % collection.length;
+                (currentActiveIndex + offset + collection.length) %
+                collection.length;
 
             onSelectIndex(nextIndex);
         },
-        [activeIndex, canNavigate, collection.length, onSelectIndex],
+        [currentActiveIndex, canNavigate, collection.length, onSelectIndex],
     );
 
     const handleCopy = useCallback(async () => {
@@ -125,8 +186,12 @@ export default function MediaLightbox({
         setIsCopying(true);
 
         try {
-            await copyMediaToClipboard(activeMedia);
-            showStatus(`${activeMedia.type} copied to clipboard.`);
+            const result = await copyMediaToClipboard(activeMedia);
+            showStatus(
+                result.kind === 'link'
+                    ? `${activeMedia.type} link copied to clipboard.`
+                    : `${activeMedia.type} copied to clipboard.`,
+            );
         } catch (error) {
             console.error('Unable to copy gallery media.', error);
             showStatus(`Unable to copy ${activeMedia.type}.`);
@@ -135,29 +200,88 @@ export default function MediaLightbox({
         }
     }, [activeMedia, isCopying, showStatus]);
 
-    const handlePost = useCallback(() => {
-        if (!activeMedia) {
+    const handlePost = useCallback(async () => {
+        if (!activeMedia || isPosting) {
             return;
         }
 
-        const popup = window.open(xIntentUrl(activeMedia), '_blank');
+        setIsPosting(true);
 
-        if (!popup) {
-            showStatus('Unable to open X.');
-            return;
+        try {
+            if (canAttemptNativeFileShare()) {
+                try {
+                    const result = await shareMediaFile(
+                        activeMedia,
+                        xPostText(activeMedia),
+                    );
+
+                    if (result.kind === 'shared') {
+                        showStatus('Share sheet opened with media.');
+                        return;
+                    }
+                } catch (error) {
+                    if (isShareAbortError(error)) {
+                        return;
+                    }
+
+                    console.error(
+                        'Unable to share gallery media directly.',
+                        error,
+                    );
+                }
+            }
+
+            const popup = window.open(xIntentUrl(activeMedia), '_blank');
+
+            if (!popup) {
+                showStatus('Unable to open X.');
+                return;
+            }
+
+            popup.opener = null;
+
+            try {
+                const result = await copyMediaToClipboard(activeMedia);
+
+                showStatus(
+                    result.kind === 'link'
+                        ? 'X opened. Video link copied; attach the video in X.'
+                        : 'X opened. Media copied; paste it into the composer.',
+                );
+            } catch (error) {
+                console.error(
+                    'Unable to copy gallery media before posting.',
+                    error,
+                );
+                showStatus('X opened. Attach the media before posting.');
+            }
+        } finally {
+            setIsPosting(false);
         }
-
-        popup.opener = null;
-    }, [activeMedia, showStatus]);
+    }, [activeMedia, isPosting, showStatus]);
 
     useEffect(() => {
-        if (!activeMedia) {
+        if (!isClosing) {
+            return;
+        }
+
+        const timeout = window.setTimeout(() => {
+            setIsCopying(false);
+            setIsPosting(false);
+            setExitingMedia(null);
+        }, LIGHTBOX_EXIT_DURATION);
+
+        return () => window.clearTimeout(timeout);
+    }, [isClosing]);
+
+    useEffect(() => {
+        if (!currentActiveMedia) {
             return;
         }
 
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
-                onClose();
+                handleRequestClose();
                 return;
             }
 
@@ -176,7 +300,7 @@ export default function MediaLightbox({
         document.addEventListener('keydown', handleKeyDown);
 
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [activeMedia, onClose, selectOffset]);
+    }, [currentActiveMedia, handleRequestClose, selectOffset]);
 
     useEffect(() => {
         if (!activeMedia) {
@@ -197,7 +321,7 @@ export default function MediaLightbox({
 
     return (
         <div
-            className="vault-gallery__lightbox"
+            className={lightboxClassName}
             role="dialog"
             aria-label="Media viewer"
             aria-modal
@@ -206,14 +330,14 @@ export default function MediaLightbox({
                 type="button"
                 className="vault-gallery__lightbox-backdrop"
                 aria-label="Close media viewer"
-                onClick={onClose}
+                onClick={handleRequestClose}
             />
 
             <button
                 type="button"
                 className="vault-gallery__lightbox-close"
                 aria-label="Close media viewer"
-                onClick={onClose}
+                onClick={handleRequestClose}
             >
                 <img src="/images/icon-close.png" alt="" aria-hidden="true" />
             </button>
@@ -249,19 +373,14 @@ export default function MediaLightbox({
             )}
 
             <section className="vault-gallery__lightbox-stage">
-                <img
-                    src="/images/sigma-vault-logo.png"
-                    alt="$SIGMA VAULT"
-                    className="vault-gallery__lightbox-logo"
-                />
-
                 <div className="vault-gallery__lightbox-actions">
                     <button
                         type="button"
                         className="vault-gallery__lightbox-action"
-                        onClick={handlePost}
+                        disabled={isPosting}
+                        onClick={() => void handlePost()}
                     >
-                        <span>Post</span>
+                        <span>{isPosting ? 'Posting' : 'Post'}</span>
                         <img src="/images/icon-x.png" alt="" aria-hidden />
                     </button>
 
@@ -277,19 +396,29 @@ export default function MediaLightbox({
                 </div>
 
                 <figure className="vault-gallery__lightbox-figure">
-                    <div className="vault-gallery__lightbox-media">
+                    <div
+                        key={activeMediaKey}
+                        className="vault-gallery__lightbox-media"
+                        style={mediaDimensionsStyle(activeMedia)}
+                    >
                         {activeMedia.type === 'video' &&
                         activeMedia.media_url ? (
                             <video
-                                key={activeMedia.id}
                                 src={activeMedia.media_url}
                                 poster={activeMedia.thumbnail_url ?? undefined}
+                                width={activeMedia.width ?? undefined}
+                                height={activeMedia.height ?? undefined}
                                 controls
                                 autoPlay
                                 playsInline
                             />
                         ) : activeMediaUrl ? (
-                            <img src={activeMediaUrl} alt={activeMedia.title} />
+                            <img
+                                src={activeMediaUrl}
+                                alt={activeMedia.title}
+                                width={activeMedia.width ?? undefined}
+                                height={activeMedia.height ?? undefined}
+                            />
                         ) : (
                             <span className="vault-gallery__lightbox-placeholder">
                                 {activeMedia.title}
