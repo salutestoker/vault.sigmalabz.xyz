@@ -22,6 +22,7 @@ const SIGMA_VAULT_SHARE_URL = 'https://vault.sigmalabz.xyz';
 const SIGMA_VAULT_X_HANDLE = '@SigmaOnXRPL';
 
 type LightboxMediaStyle = CSSProperties & {
+    '--lightbox-media-aspect-ratio'?: string;
     '--lightbox-media-height'?: string;
     '--lightbox-media-width'?: string;
 };
@@ -31,6 +32,13 @@ const mediaDisplayUrl = (media: GalleryMedia): string | null =>
 
 const mediaDimensionsStyle = (media: GalleryMedia): LightboxMediaStyle => {
     const style: LightboxMediaStyle = {};
+    const hasMeasuredSize =
+        Boolean(media.width && media.width > 0) &&
+        Boolean(media.height && media.height > 0);
+
+    style['--lightbox-media-aspect-ratio'] = hasMeasuredSize
+        ? `${media.width} / ${media.height}`
+        : '1 / 1';
 
     if (media.width && media.width > 0) {
         style['--lightbox-media-width'] = `${media.width}px`;
@@ -108,6 +116,7 @@ export default function MediaLightbox({
 }: MediaLightboxProps) {
     const [isCopying, setIsCopying] = useState(false);
     const [isPosting, setIsPosting] = useState(false);
+    const [mediaReadyKey, setMediaReadyKey] = useState<string | null>(null);
     const [exitingMedia, setExitingMedia] = useState<GalleryMedia | null>(null);
     const { showToast: showLocalToast, toast: localToast } = useToast(
         LIGHTBOX_STATUS_DURATION,
@@ -148,6 +157,9 @@ export default function MediaLightbox({
               activeMedia.preview_url ?? '',
           ].join(':')
         : null;
+    const isMediaReady =
+        Boolean(activeMediaKey) &&
+        (!activeMediaUrl || mediaReadyKey === activeMediaKey);
     const lightboxClassName = [
         'vault-gallery__lightbox',
         isClosing ? 'is-closing' : null,
@@ -328,6 +340,10 @@ export default function MediaLightbox({
         };
     }, [activeMedia]);
 
+    const handleMediaReady = useCallback(() => {
+        setMediaReadyKey(activeMediaKey);
+    }, [activeMediaKey]);
+
     if (!activeMedia) {
         return null;
     }
@@ -412,6 +428,8 @@ export default function MediaLightbox({
                     <div
                         key={activeMediaKey}
                         className="vault-gallery__lightbox-media"
+                        aria-busy={!isMediaReady}
+                        data-ready={isMediaReady ? 'true' : 'false'}
                         style={mediaDimensionsStyle(activeMedia)}
                     >
                         {activeMedia.type === 'video' &&
@@ -423,6 +441,8 @@ export default function MediaLightbox({
                                 height={activeMedia.height ?? undefined}
                                 controls
                                 autoPlay
+                                onError={handleMediaReady}
+                                onLoadedData={handleMediaReady}
                                 playsInline
                             />
                         ) : activeMediaUrl ? (
@@ -431,6 +451,8 @@ export default function MediaLightbox({
                                 alt={activeMedia.title}
                                 width={activeMedia.width ?? undefined}
                                 height={activeMedia.height ?? undefined}
+                                onError={handleMediaReady}
+                                onLoad={handleMediaReady}
                             />
                         ) : (
                             <span className="vault-gallery__lightbox-placeholder">
