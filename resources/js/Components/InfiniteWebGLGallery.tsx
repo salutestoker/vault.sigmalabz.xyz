@@ -2,6 +2,7 @@
  * WebGL gallery behavior adapted from Codrops' "Infinite WebGL Images"
  * demo by Luis Henrique Bizarro. See THIRD_PARTY_NOTICES.md.
  */
+import LoadingVideo from '@/Components/LoadingVideo';
 import {
     Camera,
     Mesh,
@@ -684,6 +685,8 @@ export default function InfiniteWebGLGallery({
     const imagesLoaded =
         images.length === 0 || loadedImageSetKey === imageSetKey;
     const webglFallback = failedWebglImageSetKey === imageSetKey;
+    const isLandingReady =
+        imagesLoaded || prefersReducedMotion || webglFallback;
     const renderedImages = useMemo(() => fillLayoutCycle(images), [images]);
 
     const figureStyles = useMemo(
@@ -757,6 +760,7 @@ export default function InfiniteWebGLGallery({
 
     const className = [
         'infinite-gallery',
+        isLandingReady ? '' : 'is-loading',
         imagesLoaded ? 'is-loaded' : '',
         prefersReducedMotion ? 'is-reduced-motion' : '',
         webglFallback ? 'is-webgl-fallback' : '',
@@ -841,6 +845,18 @@ export default function InfiniteWebGLGallery({
                     </p>
                 )}
             </section>
+
+            <div
+                aria-hidden={isLandingReady}
+                aria-live={isLandingReady ? 'off' : 'polite'}
+                className="infinite-gallery__loading"
+                role="status"
+            >
+                <LoadingVideo className="infinite-gallery__loading-icon" />
+                {!isLandingReady ? (
+                    <span className="sr-only">Loading landing gallery</span>
+                ) : null}
+            </div>
         </main>
     );
 }

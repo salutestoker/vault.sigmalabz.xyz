@@ -6,6 +6,7 @@ import GallerySkeleton from '@/Components/Gallery/GallerySkeleton';
 import MediaGrid from '@/Components/Gallery/MediaGrid';
 import MediaLightbox from '@/Components/Gallery/MediaLightbox';
 import OrbitGalleryScene from '@/Components/Gallery/OrbitGalleryScene';
+import Toast, { useToast } from '@/Components/Toast';
 import { type PageProps } from '@/types';
 import {
     type GalleryCategory,
@@ -50,6 +51,7 @@ export default function GalleryIndex({
     const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(
         null,
     );
+    const { showToast: showClipboardToast, toast: clipboardToast } = useToast();
     const didMountRef = useRef(false);
 
     const serializedFilters = useMemo(() => JSON.stringify(filters), [filters]);
@@ -196,7 +198,10 @@ export default function GalleryIndex({
                 selectedIndex={selectedMediaIndex}
                 onSelectIndex={setSelectedMediaIndex}
                 onClose={() => setSelectedMediaIndex(null)}
+                onStatus={showClipboardToast}
             />
+
+            <Toast toast={clipboardToast} />
         </main>
     );
 }

@@ -1,3 +1,4 @@
+import LoadingVideo from '@/Components/LoadingVideo';
 import { type GalleryMedia } from '@/types/gallery';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -1187,10 +1188,7 @@ const GalleryV2Scene = forwardRef<GalleryV2SceneHandle, GalleryV2SceneProps>(
                         role="status"
                         aria-live="polite"
                     >
-                        <span
-                            className="vault-gallery-v2__loading-icon"
-                            aria-hidden="true"
-                        />
+                        <LoadingVideo className="vault-gallery-v2__loading-icon" />
                         <span className="sr-only">Loading media</span>
                     </div>
                 ) : null}

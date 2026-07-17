@@ -7,6 +7,7 @@ import GalleryV2Scene, {
 } from '@/Components/Gallery/GalleryV2Scene';
 import MediaGrid from '@/Components/Gallery/MediaGrid';
 import MediaLightbox from '@/Components/Gallery/MediaLightbox';
+import Toast, { useToast } from '@/Components/Toast';
 import { type PageProps } from '@/types';
 import {
     type GalleryCategory,
@@ -19,7 +20,6 @@ import axios from 'axios';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const GALLERY_V2_PAGE_SIZE = 100;
-const CLIPBOARD_TOAST_DURATION = 2400;
 const DEFAULT_CATEGORY = 'all';
 const CATEGORY_QUERY_PARAM = 'category';
 
@@ -102,16 +102,15 @@ export default function GalleryV2({
     });
     const [media, setMedia] = useState(initialMedia.data);
     const [isLoading, setIsLoading] = useState(false);
-    const [clipboardToast, setClipboardToast] = useState<string | null>(null);
     const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(
         null,
     );
+    const { showToast: showClipboardToast, toast: clipboardToast } = useToast();
     const didMountRef = useRef(false);
     const fetchRequestRef = useRef(0);
     const filterRevisionRef = useRef(0);
     const mediaSignatureRef = useRef(mediaSignature(initialMedia.data));
     const sceneRef = useRef<GalleryV2SceneHandle | null>(null);
-    const clipboardToastTimeoutRef = useRef<number | null>(null);
 
     const serializedFilters = useMemo(() => JSON.stringify(filters), [filters]);
     const selectedMedia =
@@ -206,18 +205,6 @@ export default function GalleryV2({
         }
     }, [filters]);
 
-    const showClipboardToast = useCallback((message: string) => {
-        if (clipboardToastTimeoutRef.current) {
-            window.clearTimeout(clipboardToastTimeoutRef.current);
-        }
-
-        setClipboardToast(message);
-        clipboardToastTimeoutRef.current = window.setTimeout(() => {
-            setClipboardToast(null);
-            clipboardToastTimeoutRef.current = null;
-        }, CLIPBOARD_TOAST_DURATION);
-    }, []);
-
     const handleMediaClick = useCallback(
         (selectedMedia: GalleryMedia) => {
             const nextIndex = media.findIndex(
@@ -282,14 +269,6 @@ export default function GalleryV2({
         return () => window.clearTimeout(timeout);
     }, [serializedFilters, fetchMedia]);
 
-    useEffect(() => {
-        return () => {
-            if (clipboardToastTimeoutRef.current) {
-                window.clearTimeout(clipboardToastTimeoutRef.current);
-            }
-        };
-    }, []);
-
     return (
         <main className="vault-gallery vault-gallery--v2">
             <Head title="Gallery" />
@@ -323,15 +302,7 @@ export default function GalleryV2({
                 )}
             </div>
 
-            {clipboardToast && (
-                <div
-                    className="vault-gallery__clipboard-toast"
-                    role="status"
-                    aria-live="polite"
-                >
-                    {clipboardToast}
-                </div>
-            )}
+            <Toast toast={clipboardToast} />
 
             <MediaLightbox
                 media={selectedMedia}

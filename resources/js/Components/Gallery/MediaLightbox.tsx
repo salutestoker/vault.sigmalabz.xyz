@@ -1,6 +1,7 @@
+import Toast, { useToast } from '@/Components/Toast';
 import { copyMediaToClipboard } from '@/lib/galleryClipboard';
 import { type GalleryMedia } from '@/types/gallery';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface MediaLightboxProps {
     media: GalleryMedia | null;
@@ -67,8 +68,9 @@ export default function MediaLightbox({
     onStatus,
 }: MediaLightboxProps) {
     const [isCopying, setIsCopying] = useState(false);
-    const [localStatus, setLocalStatus] = useState<string | null>(null);
-    const localStatusTimeoutRef = useRef<number | null>(null);
+    const { showToast: showLocalToast, toast: localToast } = useToast(
+        LIGHTBOX_STATUS_DURATION,
+    );
     const collection = items.length > 0 ? items : media ? [media] : [];
     const fallbackIndex =
         media && collection.length > 0
@@ -96,17 +98,9 @@ export default function MediaLightbox({
                 return;
             }
 
-            if (localStatusTimeoutRef.current) {
-                window.clearTimeout(localStatusTimeoutRef.current);
-            }
-
-            setLocalStatus(message);
-            localStatusTimeoutRef.current = window.setTimeout(() => {
-                setLocalStatus(null);
-                localStatusTimeoutRef.current = null;
-            }, LIGHTBOX_STATUS_DURATION);
+            showLocalToast(message);
         },
-        [onStatus],
+        [onStatus, showLocalToast],
     );
 
     const selectOffset = useCallback(
@@ -196,14 +190,6 @@ export default function MediaLightbox({
             document.body.style.overflow = previousOverflow;
         };
     }, [activeMedia]);
-
-    useEffect(() => {
-        return () => {
-            if (localStatusTimeoutRef.current) {
-                window.clearTimeout(localStatusTimeoutRef.current);
-            }
-        };
-    }, []);
 
     if (!activeMedia) {
         return null;
@@ -329,15 +315,7 @@ export default function MediaLightbox({
                     )}
                 </figure>
 
-                {localStatus && (
-                    <div
-                        className="vault-gallery__lightbox-status"
-                        role="status"
-                        aria-live="polite"
-                    >
-                        {localStatus}
-                    </div>
-                )}
+                <Toast toast={localToast} />
             </section>
         </div>
     );
