@@ -21,10 +21,11 @@ Route::get('/', function () {
         ->storedForGallery()
         ->whereHas('category', fn ($query) => $query->whereIn('slug', ['sigma', 'aura']))
         ->where('type', GalleryMediaType::Image->value)
+        ->whereNotNull('media_path')
         ->inRandomOrder()
         ->limit(25)
         ->get()
-        ->map(fn (GalleryMedia $media): ?string => $media->media_url ?: $media->thumbnail_url)
+        ->map(fn (GalleryMedia $media): string => route('gallery.media.asset', $media, false))
         ->filter()
         ->values()
         ->all();
@@ -45,6 +46,7 @@ Route::get('/auth/discord/callback', [DiscordAuthController::class, 'callback'])
 
 Route::get('/gallery', GalleryV2PageController::class)->name('gallery.index');
 Route::get('/gallery/media', [GalleryMediaController::class, 'v2Index'])->name('gallery.media.index');
+Route::get('/gallery/media/{media}/asset', [GalleryMediaController::class, 'asset'])->name('gallery.media.asset');
 Route::get('/gallery/media/{media}/clipboard', [GalleryMediaController::class, 'clipboard'])->name('gallery.media.clipboard');
 Route::get('/gallery/media/{media}', [GalleryMediaController::class, 'show'])->name('gallery.media.show');
 

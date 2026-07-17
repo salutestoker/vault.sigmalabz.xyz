@@ -65,6 +65,15 @@ class GalleryMediaController extends Controller
             ?? abort(404);
     }
 
+    public function asset(Request $request, GalleryMedia $media): SymfonyResponse
+    {
+        if (! $request->user()?->isAdmin()) {
+            abort_unless($media->visibility->value === 'public', 404);
+        }
+
+        return $this->storedMediaResponse($media) ?? abort(404);
+    }
+
     private function paginatedMedia(
         Request $request,
         GalleryMediaQuery $mediaQuery,

@@ -46,7 +46,7 @@ class GalleryAccessTest extends TestCase
             ->map(function (int $index) use ($aura, $sigma): string {
                 $path = "gallery/media/visible-{$index}/image.jpg";
 
-                GalleryMedia::factory()->create([
+                $media = GalleryMedia::factory()->create([
                     'gallery_category_id' => $index % 2 === 0 ? $sigma->id : $aura->id,
                     'original_url' => "https://cdn.example.test/gallery/visible-{$index}.jpg",
                     'preview_url' => "https://cdn.example.test/gallery/visible-{$index}.jpg",
@@ -54,7 +54,7 @@ class GalleryAccessTest extends TestCase
                     'thumbnail_path' => null,
                 ]);
 
-                return url("/storage/{$path}");
+                return route('gallery.media.asset', $media, false);
             });
 
         GalleryMedia::factory()->hidden()->create([
@@ -110,6 +110,25 @@ class GalleryAccessTest extends TestCase
         ]);
 
         $this->get("/gallery/media/{$media->id}/clipboard")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/jpeg')
+            ->assertStreamedContent('image-bytes');
+    }
+
+    public function test_gallery_asset_endpoint_streams_visible_stored_media(): void
+    {
+        Storage::fake('public');
+        config(['gallery.media_disk' => 'public']);
+
+        Storage::disk('public')->put('gallery/media/1/image.jpg', 'image-bytes');
+
+        $media = GalleryMedia::factory()->create([
+            'media_path' => 'gallery/media/1/image.jpg',
+            'mime_type' => 'image/jpeg',
+            'filename' => 'image.jpg',
+        ]);
+
+        $this->get("/gallery/media/{$media->id}/asset")
             ->assertOk()
             ->assertHeader('Content-Type', 'image/jpeg')
             ->assertStreamedContent('image-bytes');
