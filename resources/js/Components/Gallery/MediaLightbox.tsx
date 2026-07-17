@@ -393,8 +393,8 @@ export default function MediaLightbox({
                         disabled={isPosting}
                         onClick={() => void handlePost()}
                     >
-                        <span>{isPosting ? 'Posting' : 'Post'}</span>
-                        <img src="/images/icon-x.png" alt="" aria-hidden />
+                        <span>{isPosting ? 'Sharing' : 'Share'}</span>
+                        <img src="/images/icon-share.png" alt="" aria-hidden />
                     </button>
 
                     <button
